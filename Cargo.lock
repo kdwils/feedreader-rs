@@ -434,6 +434,7 @@ dependencies = [
  "anyhow",
  "askama",
  "askama_warp",
+ "base64 0.21.0",
  "chrono",
  "datetime",
  "feed-rs",

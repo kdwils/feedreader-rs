@@ -2,6 +2,7 @@ mod db;
 
 use anyhow::Result;
 use askama::Template;
+use base64::{engine::general_purpose, Engine as _};
 use chrono::{DateTime, SecondsFormat, Utc};
 use core::panic;
 use feed_rs::parser;
@@ -17,14 +18,14 @@ struct Healthz {
 #[derive(Template)]
 #[template(path = "feeds.html")]
 struct FeedsTemplate {
-    page: db::Page,
+    cursor: db::Cursor,
     feeds: Vec<Feed>,
 }
 
 #[derive(Template)]
 #[template(path = "feed_list.html")]
 struct FeedListTemplate {
-    page: db::Page,
+    cursor: db::Cursor,
     feeds: Vec<Feed>,
 }
 
@@ -35,16 +36,16 @@ struct AddFeedTemplate {}
 #[derive(Template)]
 #[template(path = "article_list.html")]
 struct ArticleListTemplate {
-    page: db::Page,
+    cursor: db::Cursor,
     articles: Vec<Article>,
 }
 
 #[derive(Template, Default)]
-#[template(path = "article_base.html")]
+#[template(path = "articles.html")]
 struct ArticleBaseTemplate {
     article_filter: String,
     title: String,
-    page: db::Page,
+    cursor: db::Cursor,
     articles: Vec<Article>,
 }
 
@@ -66,7 +67,7 @@ impl rweb::reject::Reject for BadActionError {}
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct Feed {
-    id: i32,
+    id: String,
     name: String,
     site_url: String,
     feed_url: String,
@@ -77,7 +78,7 @@ pub struct Feed {
 impl Feed {
     pub fn new(name: String, site_url: String, feed_url: String) -> Self {
         Feed {
-            id: 0,
+            id: general_purpose::URL_SAFE.encode(feed_url.clone()),
             name,
             site_url,
             feed_url,
@@ -111,7 +112,7 @@ struct AddFeed {
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct Article {
-    id: i32,
+    id: String,
     feed: String,
     title: String,
     link: String,
@@ -132,7 +133,7 @@ impl Article {
         favorited: bool,
     ) -> Self {
         Article {
-            id: 0,
+            id: general_purpose::URL_SAFE.encode(link.clone()),
             feed: "".to_string(),
             title,
             link,
@@ -269,62 +270,59 @@ fn healthz() -> Json<Healthz> {
 
 #[get("/")]
 async fn index(#[data] store: db::Storage) -> Result<ArticleBaseTemplate, Rejection> {
-    let qr = store
+    let page = store
         .get_unread_articles(db::MAX_DATE.to_string())
         .await
         .map_err(reject_anyhow)?;
 
     Ok(ArticleBaseTemplate {
-        page: qr.page,
         title: ArticleFilter::Unread.to_string(),
         article_filter: ArticleFilter::Unread.to_string(),
-        articles: match qr.articles {
-            Some(articles) => articles,
-            None => vec![],
-        },
+        cursor: page.cursor,
+        articles: page.items.iter().map(|r| r.into()).collect(),
     })
 }
 
 #[get("/favorites.html")]
 async fn favorited(#[data] store: db::Storage) -> Result<ArticleBaseTemplate, Rejection> {
-    let qr = store
+    let page = store
         .get_favorited_articles(db::MAX_DATE.to_string())
         .await
         .map_err(reject_anyhow)?;
 
     Ok(ArticleBaseTemplate {
-        page: qr.page,
+        cursor: page.cursor,
         title: "favorites".to_string(),
         article_filter: ArticleFilter::Favorite.to_string(),
-        articles: qr.articles.unwrap_or(vec![]),
+        articles: page.items.iter().map(|r| r.into()).collect(),
     })
 }
 
 #[get("/history.html")]
 async fn history(#[data] store: db::Storage) -> Result<ArticleBaseTemplate, Rejection> {
-    let qr = store
+    let page = store
         .get_read_articles(db::MAX_DATE.to_string())
         .await
         .map_err(reject_anyhow)?;
 
     Ok(ArticleBaseTemplate {
-        page: qr.page,
+        cursor: page.cursor,
         title: "history".to_string(),
         article_filter: ArticleFilter::Read.to_string(),
-        articles: qr.articles.unwrap_or(vec![]),
+        articles: page.items.iter().map(|r| r.into()).collect(),
     })
 }
 
 #[get("/feeds.html")]
 async fn feeds_html(#[data] db: db::Storage) -> Result<FeedsTemplate, Rejection> {
-    let qr = db
-        .get_feeds(db::MIN_ID.to_string())
+    let page = db
+        .get_feeds(db::MAX_DATE.to_string())
         .await
         .map_err(reject_anyhow)?;
 
     Ok(FeedsTemplate {
-        page: qr.page,
-        feeds: qr.feeds.unwrap_or(vec![]),
+        cursor: page.cursor,
+        feeds: page.items.iter().map(|r| r.into()).collect(),
     })
 }
 
@@ -337,35 +335,37 @@ async fn add_feed_html() -> Result<AddFeedTemplate, Rejection> {
 async fn add_feed(
     #[form] feed: AddFeed,
     #[data] store: db::Storage,
-    #[header = "pagination"] pagination: String,
 ) -> Result<FeedsTemplate, Rejection> {
     store.add_feed(feed).await.map_err(reject_anyhow)?;
-    let qr = store.get_feeds(pagination).await.map_err(reject_anyhow)?;
+    let page = store
+        .get_feeds(db::MAX_DATE.to_string())
+        .await
+        .map_err(reject_anyhow)?;
 
     Ok(FeedsTemplate {
-        page: qr.page,
-        feeds: qr.feeds.unwrap_or(vec![]),
+        cursor: page.cursor,
+        feeds: page.items.iter().map(|r| r.into()).collect(),
     })
 }
 
 #[delete("/feeds/{id}")]
 async fn delete_feed(
     #[data] store: db::Storage,
-    id: i32,
+    id: String,
     #[header = "pagination"] pagination: String,
 ) -> Result<FeedListTemplate, Rejection> {
     store.delete_feed(id).await.map_err(reject_anyhow)?;
-    let qr = store.get_feeds(pagination).await.map_err(reject_anyhow)?;
+    let page = store.get_feeds(pagination).await.map_err(reject_anyhow)?;
 
     Ok(FeedListTemplate {
-        page: qr.page,
-        feeds: qr.feeds.unwrap_or(vec![]),
+        cursor: page.cursor,
+        feeds: page.items.iter().map(|r| r.into()).collect(),
     })
 }
 
 #[post("/feeds/{id}/refresh")]
 async fn refresh_feed(
-    id: i32,
+    id: String,
     #[data] store: db::Storage,
     #[header = "pagination"] pagination: String,
 ) -> Result<FeedListTemplate, Rejection> {
@@ -406,17 +406,17 @@ async fn refresh_feed(
         Err(e) => println!("could not update feed timestamp: {}", e.to_string()),
     }
 
-    let qr = store.get_feeds(pagination).await.map_err(reject_anyhow)?;
+    let page = store.get_feeds(pagination).await.map_err(reject_anyhow)?;
 
     Ok(FeedListTemplate {
-        page: qr.page,
-        feeds: qr.feeds.unwrap_or(vec![]),
+        cursor: page.cursor,
+        feeds: page.items.iter().map(|r| r.into()).collect(),
     })
 }
 
 #[post("/articles/{article_id}/read")]
 async fn mark_article_read(
-    article_id: i32,
+    article_id: String,
     #[data] store: db::Storage,
     #[header = "pagination"] pagination: String,
     #[header = "article_filter"] article_filter: String,
@@ -433,20 +433,20 @@ async fn mark_article_read(
 
     let filter = ArticleFilter::from_str(article_filter.as_str())?;
 
-    let qr = filter
+    let page = filter
         .list_articles(store.clone(), pagination.clone())
         .await
         .map_err(reject_anyhow)?;
 
     Ok(ArticleListTemplate {
-        page: qr.page,
-        articles: qr.articles.unwrap_or(vec![]),
+        cursor: page.cursor,
+        articles: page.items.iter().map(|r| r.into()).collect(),
     })
 }
 
 #[post("/articles/{article_id}/favorite")]
 async fn mark_article_favorite(
-    article_id: i32,
+    article_id: String,
     #[header = "pagination"] pagination: String,
     #[header = "article_filter"] article_filter: String,
     #[data] store: db::Storage,
@@ -458,14 +458,14 @@ async fn mark_article_favorite(
 
     let filter = ArticleFilter::from_str(article_filter.as_str())?;
 
-    let qr = filter
+    let page = filter
         .list_articles(store.clone(), pagination)
         .await
         .map_err(reject_anyhow)?;
 
     Ok(ArticleListTemplate {
-        page: qr.page,
-        articles: qr.articles.unwrap_or(vec![]),
+        cursor: page.cursor,
+        articles: page.items.iter().map(|r| r.into()).collect(),
     })
 }
 
@@ -477,14 +477,14 @@ async fn get_articles(
 ) -> Result<ArticleListTemplate, Rejection> {
     let filter = ArticleFilter::from_str(article_filter.as_str())?;
 
-    let qr = filter
+    let page = filter
         .list_articles(store.clone(), pagination)
         .await
         .map_err(reject_anyhow)?;
 
     Ok(ArticleListTemplate {
-        page: qr.page,
-        articles: qr.articles.unwrap_or(vec![]),
+        cursor: page.cursor,
+        articles: page.items.iter().map(|r| r.into()).collect(),
     })
 }
 
@@ -510,15 +510,11 @@ impl FromStr for ArticleFilter {
 }
 
 impl ArticleFilter {
-    async fn list_articles(
-        self,
-        store: db::Storage,
-        pagination: String,
-    ) -> Result<db::QueryResponse> {
+    async fn list_articles(self, store: db::Storage, pagination: String) -> Result<db::Page> {
         match self {
             ArticleFilter::Unread => return store.get_unread_articles(pagination).await,
             ArticleFilter::Favorite => return store.get_favorited_articles(pagination).await,
-            ArticleFilter::Read => return store.get_favorited_articles(pagination).await,
+            ArticleFilter::Read => return store.get_read_articles(pagination).await,
         }
     }
 

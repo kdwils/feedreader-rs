@@ -1,38 +1,91 @@
 <div id="feed_list">
   {% for feed in feeds %}
-  <article class="border padding-xs margin-bottom-s">
+  <article class="border box-shadow-m padding-xs margin-top-s">
     <header>
       <hgroup>
-        <h3 class="no-margin-bottom">{{ feed.name }}</a></h3>
+        <div class="group group-m group-space-between">
+          <ul>
+            <li>
+              <h3 class="no-margin-bottom">{{ feed.name }}</a></h3>
+            </li>
+            <li>
+              <button title="delete feed" class="button button-square button-white" hx-delete="/feeds/{{ feed.id }}"
+                hx-target="#feed_list" hx-headers='{"pagination": "{{ cursor.curr }}" }' hx-swap="outerHTML">
+                <svg height="20" viewBox="0 0 20 20" width="20" xmlns="http://www.w3.org/2000/svg">
+                  <path
+                    d="m15.5 2h-3.5v-.5c0-.827-.673-1.5-1.5-1.5h-2c-.827 0-1.5.673-1.5 1.5v.5h-3.5c-.827 0-1.5.673-1.5 1.5v1c0 .652.418 1.208 1 1.414v12.586c0 .827.673 1.5 1.5 1.5h10c.827 0 1.5-.673 1.5-1.5v-12.586c.582-.206 1-.762 1-1.414v-1c0-.827-.673-1.5-1.5-1.5zm-7.5-.5c0-.276.224-.5.5-.5h2c.276 0 .5.224.5.5v.5h-3zm6.5 17.5h-10c-.276 0-.5-.224-.5-.5v-12.5h11v12.5c0 .276-.224.5-.5.5zm1.5-14.5c0 .276-.224.5-.5.5h-12c-.276 0-.5-.224-.5-.5v-1c0-.276.224-.5.5-.5h12c.276 0 .5.224.5.5z" />
+                  <path d="m12.5 7c-.276 0-.5.224-.5.5v10c0 .276.224.5.5.5s.5-.224.5-.5v-10c0-.276-.224-.5-.5-.5z" />
+                  <path d="m9.5 7c-.276 0-.5.224-.5.5v10c0 .276.224.5.5.5s.5-.224.5-.5v-10c0-.276-.224-.5-.5-.5z" />
+                  <path d="m6.5 7c-.276 0-.5.224-.5.5v10c0 .276.224.5.5.5s.5-.224.5-.5v-10c0-.276-.224-.5-.5-.5z" />
+                </svg>
+              </button>
+              <button title="refresh feed articles" class="button button-square button-white"
+                hx-post="/feeds/{{ feed.id }}/refresh" hx-target="#feed_list"
+                hx-headers='{"pagination": "{{ cursor.curr }}"}'>
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path d="m0 0h24v24h-24z" fill="#fff" opacity="0" />
+                  <path
+                    d="m20.3 13.43a1 1 0 0 0 -1.25.65 7.14 7.14 0 0 1 -6.87 4.92 7.1 7.1 0 0 1 -7.18-7 7.1 7.1 0 0 1 7.18-7 7.26 7.26 0 0 1 4.65 1.67l-2.17-.36a1 1 0 0 0 -1.15.83 1 1 0 0 0 .83 1.15l4.24.7h.17a1 1 0 0 0 .34-.06.33.33 0 0 0 .1-.06.78.78 0 0 0 .2-.11l.09-.11c0-.05.09-.09.13-.15s0-.1.05-.14a1.34 1.34 0 0 0 .07-.18l.75-4a1 1 0 0 0 -2-.38l-.27 1.45a9.21 9.21 0 0 0 -6.03-2.25 9.1 9.1 0 0 0 -9.18 9 9.1 9.1 0 0 0 9.18 9 9.12 9.12 0 0 0 8.82-6.32 1 1 0 0 0 -.7-1.25z"
+                    fill="#231f20" />
+                </svg>
+              </button>
+            </li>
+          </ul>
+        </div>
         <hr>
-        <p class="no-margin-top"><a href={{feed.site_url}} target="_blank">{{ feed.site_url }}</a></p>
+        <p class="no-margin-top"><a href={{ feed.site_url }} target="_blank">{{ feed.site_url }}</a></p>
       </hgroup>
     </header>
-    <p class="flex">
-      <a class="padding-right-xs" href="#" hx-post="/feeds/{{ feed.id }}/refresh" hx-target="#feed_list">Refresh</a>
-      <a class="padding-right-xs" href="#" hx-delete="/feeds/{{ feed.id }}" hx-target="#feed_list"
-        hx-swap="outerHTML">Remove</a>
-    </p>
+    <div class="">
+
+    </div>
   </article>
   {% endfor %}
-  <div class="group group-m group-space-between">
+  {% if feeds.len() != 0 %}
+  <div class="group group-m group-space-between margin-top-s">
     <ul>
       <li>
-        {% if page.has_prev %}
-        <a href="#" hx-get="/feeds" hx-target="#feed_list" hx-headers='{"pagination": "{{ page.prev }}"}'
-          hx-swap="outerHTML">Previous</a>
+        {% if cursor.has_prev %}
+        <button title="previous page" hx-get="/feeds" hx-target="#feed_list" hx-swap="outerHTML"
+          hx-headers='{"pagination": "{{ cursor.prev }}"}'>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+            <polygon fill="var(--ci-primary-color, currentColor)"
+              points="497.333 239.999 80.092 239.999 176.087 144.004 153.46 121.377 18.837 256 153.46 390.623 176.087 367.996 80.09 271.999 497.333 271.999 497.333 239.999"
+              class="ci-primary" />
+          </svg>
+        </button>
         {% else %}
-        <p>Previous</p>
+        <button title="previous page" disabled>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+            <polygon fill="var(--ci-primary-color, currentColor)"
+              points="497.333 239.999 80.092 239.999 176.087 144.004 153.46 121.377 18.837 256 153.46 390.623 176.087 367.996 80.09 271.999 497.333 271.999 497.333 239.999"
+              class="ci-primary" />
+          </svg>
+        </button>
         {% endif %}
       </li>
       <li>
-        {% if page.has_next %}
-        <a href="#" hx-get="/feeds" hx-target="#feed_list" hx-headers='{"pagination": "{{ page.next }}"}'
-          hx-swap="outerHTML">Next</a>
+        {% if cursor.has_next %}
+        <button title="next page" hx-get="/feeds" hx-target="#feed_list" hx-swap="outerHTML"
+          hx-headers='{"pagination": "{{ cursor.next }}"}'>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+            <polygon fill="var(--ci-primary-color, currentColor)"
+              points="359.873 121.377 337.246 144.004 433.243 240.001 16 240.001 16 240.002 16 272.001 16 272.002 433.24 272.002 337.246 367.996 359.873 390.623 494.498 256 359.873 121.377"
+              class="ci-primary" />
+          </svg>
+
+        </button>
         {% else %}
-        <p>Next</p>
+        <button title="next page" disabled>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+            <polygon fill="var(--ci-primary-color, currentColor)"
+              points="359.873 121.377 337.246 144.004 433.243 240.001 16 240.001 16 240.002 16 272.001 16 272.002 433.24 272.002 337.246 367.996 359.873 390.623 494.498 256 359.873 121.377"
+              class="ci-primary" />
+          </svg>
+        </button>
         {% endif %}
       </li>
     </ul>
   </div>
+  {% endif %}
 </div>

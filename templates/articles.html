@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<section hx-headers='{"article_filter": "{{ article_filter }}"}'>
+<section hx-headers='{"article_filter": "{{ article_filter }}" }'>
     <h2>{{ title }}</h2>
     {% include "article_list.html" %}
 </section>
