@@ -1,0 +1,38 @@
+<div id="feed_list">
+  {% for feed in feeds %}
+  <article class="border padding-xs margin-bottom-s">
+    <header>
+      <hgroup>
+        <h3 class="no-margin-bottom">{{ feed.name }}</a></h3>
+        <hr>
+        <p class="no-margin-top"><a href={{feed.site_url}} target="_blank">{{ feed.site_url }}</a></p>
+      </hgroup>
+    </header>
+    <p class="flex">
+      <a class="padding-right-xs" href="#" hx-post="/feeds/{{ feed.id }}/refresh" hx-target="#feed_list">Refresh</a>
+      <a class="padding-right-xs" href="#" hx-delete="/feeds/{{ feed.id }}" hx-target="#feed_list"
+        hx-swap="outerHTML">Remove</a>
+    </p>
+  </article>
+  {% endfor %}
+  <div class="group group-m group-space-between">
+    <ul>
+      <li>
+        {% if page.has_prev %}
+        <a href="#" hx-get="/feeds" hx-target="#feed_list" hx-headers='{"pagination": "{{ page.prev }}"}'
+          hx-swap="outerHTML">Previous</a>
+        {% else %}
+        <p>Previous</p>
+        {% endif %}
+      </li>
+      <li>
+        {% if page.has_next %}
+        <a href="#" hx-get="/feeds" hx-target="#feed_list" hx-headers='{"pagination": "{{ page.next }}"}'
+          hx-swap="outerHTML">Next</a>
+        {% else %}
+        <p>Next</p>
+        {% endif %}
+      </li>
+    </ul>
+  </div>
+</div>

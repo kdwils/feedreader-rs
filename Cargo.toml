@@ -1,0 +1,27 @@
+[package]
+name = "feedreader"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.68"
+askama = "0.11.1"
+askama_warp = "0.12.0"
+chrono = "0.4.23"
+datetime = "0.5.2"
+feed-rs = "1.2.0"
+futures = "0.3.26"
+log = "0.4.17"
+opml = "1.1.5"
+reqwest = "0.11.14"
+rss = "2.0.2"
+rweb = "0.15.0"
+serde = { version = "1.0.152", features = ["derive"] }
+tokio = "1.24.2"
+tokio-postgres = "0.7.7"
+
+[[bin]]
+name = "feedreader"
+path = "src/main.rs"

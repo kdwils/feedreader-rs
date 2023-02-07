@@ -1,0 +1,65 @@
+<div id="article_list">
+    {% for article in articles %}
+    <article class="border padding-xs margin-bottom-s">
+        <header>
+            <hgroup>
+                <div class="group group-m group-space-between">
+                    <ul>
+                        <li>
+                            <h3 class="no-margin-bottom">{{ article.feed }}</h3>
+                        </li>
+                        <li>
+                            <p>{{ article.published }}</p>
+                        </li>
+                    </ul>
+                </div>
+                <hr>
+                <h4 class="no-margin-bottom no-margin-top"><a href="{{ article.link }}" target="_blank>">{{
+                        article.title }}</a></h4>
+                {% if article.read_date != "-1" %}
+                <p class="no-margin-bottom no-margin-top">Read on {{ article.read_date }}</p>
+                {% endif %}
+            </hgroup>
+        </header>
+        <p class="flex">
+            <a class="padding-right-xs" href="#" hx-post="/articles/{{ article.id }}/read"
+                hx-headers='{"pagination": "{{ page.curr }}"}' hx-target="#article_list" hx-swap="outerHTML">
+                {% if article.read %}
+                Mark Unread
+                {% else %}
+                Read
+                {% endif %}
+            </a>
+            </a>
+            <a class="padding-right-xs" href="#" hx-post="/articles/{{ article.id }}/favorite" hx-target="#article_list"
+                hx-swap="outerHTML" hx-headers='{"pagination": "{{ page.curr }}"}'>
+                {% if article.favorited %}
+                Unfavorite
+                {% else %}
+                Favorite
+                {% endif %}
+            </a>
+        </p>
+    </article>
+    {% endfor %}
+    <div class="group group-m group-space-between">
+        <ul>
+            <li>
+                {% if page.has_prev %}
+                <a href="#" hx-get="/articles" hx-target="#article_list" hx-headers='{"pagination": "{{ page.prev }}"}'
+                    hx-swap="outerHTML">Previous</a>
+                {% else %}
+                <p>Previous</p>
+                {% endif %}
+            </li>
+            <li>
+                {% if page.has_next %}
+                <a href="#" hx-get="/articles" hx-target="#article_list" hx-headers='{"pagination": "{{ page.next }}"}'
+                    hx-swap="outerHTML">Next</a>
+                {% else %}
+                <p>Next</p>
+                {% endif %}
+            </li>
+        </ul>
+    </div>
+</div>
