@@ -246,7 +246,7 @@ async fn main() {
         .allow_any_origin()
         .allow_methods(vec!["GET", "HEAD", "POST", "DELETE"]);
 
-    let feed_routes = healthz()
+    let routes = healthz()
         .or(index(store.clone()))
         .or(favorited(store.clone()))
         .or(history(store.clone()))
@@ -260,7 +260,7 @@ async fn main() {
         .or(refresh_feed(store.clone()))
         .with(cors);
 
-    serve(feed_routes).run(([0, 0, 0, 0], 8080)).await;
+    serve(routes).run(([0, 0, 0, 0], 8080)).await;
 }
 
 #[get("/healthz")]
