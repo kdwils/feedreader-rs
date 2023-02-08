@@ -1,7 +1,9 @@
 use super::{AddFeed, Article, Feed};
 use anyhow::Result;
 use futures::lock::Mutex;
+use std::str::FromStr;
 use std::sync::Arc;
+
 use tokio_postgres::{Client, Config, NoTls, Row};
 
 pub static MAX_DATE: &str = "9999-12-31";
@@ -9,6 +11,37 @@ pub static MAX_DATE: &str = "9999-12-31";
 const LIMIT: usize = 4;
 const LIMIT_UPPER_BOUND: usize = LIMIT + 1;
 const LIMIT_LOWER_BOUND: usize = LIMIT - 1;
+
+pub enum Filter {
+    Unread,
+    Favorite,
+    Read,
+}
+
+impl ToString for Filter {
+    fn to_string(&self) -> String {
+        match self {
+            Filter::Read => "read".to_string(),
+            Filter::Favorite => "favorite".to_string(),
+            Filter::Unread => "unread".to_string(),
+        }
+    }
+}
+
+impl FromStr for Filter {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> Result<Filter> {
+        match s {
+            "unread" => Ok(Filter::Unread),
+            "favorite" => Ok(Filter::Favorite),
+            "read" => Ok(Filter::Read),
+            _ => Err(anyhow::Error::msg(format!("bad filter type: {}", s))),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct BadFilterError(String);
 
 enum Ordering {
     Ascending,
@@ -324,6 +357,14 @@ CREATE TABLE IF NOT EXISTS articles (
         tx.execute(query, &[&id]).await?;
         tx.commit().await?;
         Ok(())
+    }
+
+    pub(crate) async fn filter(self, filter: Filter, pagination: String) -> Result<Page> {
+        match filter {
+            Filter::Unread => return self.get_unread_articles(pagination).await,
+            Filter::Favorite => return self.get_favorited_articles(pagination).await,
+            Filter::Read => return self.get_read_articles(pagination).await,
+        }
     }
 }
 
