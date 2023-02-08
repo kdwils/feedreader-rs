@@ -40,9 +40,6 @@ impl FromStr for Filter {
     }
 }
 
-#[derive(Debug)]
-struct BadFilterError(String);
-
 enum Ordering {
     Ascending,
     Descending,
