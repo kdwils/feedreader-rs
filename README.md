@@ -2,6 +2,8 @@
 
 Simple feedreader that templates HTML and stores feeds + their articles. 
 
+Created with the intention learning rust for fun
+
 # TODO
 - [ ] Automatic feed updates, currently can only manually refreshed a feed
 - [ ] ci + repo for cd to deploy to home cluster
