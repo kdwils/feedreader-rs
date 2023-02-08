@@ -95,33 +95,18 @@ pub struct Cursor {
 
 impl Cursor {
     fn new(next: &[Row], prev: Vec<Row>, curr: String, index: usize) -> Self {
-        let mut hn = false;
-        let mut n = "".to_string();
-        match next.len() {
-            LIMIT_UPPER_BOUND => {
-                hn = true;
-                n = next[next.len() - 1 - 1].get(index);
-            }
-            1..=LIMIT_LOWER_BOUND => {
-                hn = false;
-                n = next[next.len() - 1].get(index);
-            }
-            _ => (),
-        }
+        let (hn, n) = match next.len() {
+            // next contains the elements for the next page, we only need elements up to the limit as the last is used to confirm there is another page
+            LIMIT_UPPER_BOUND => (true, next[next.len() - 1 - 1].get(index)),
+            1..=LIMIT_LOWER_BOUND => (false, next[next.len() - 1].get(index)),
+            _ => (false, "".to_string()),
+        };
 
-        let mut hp = false;
-        let mut p = "".to_string();
-        match prev.len() {
-            LIMIT_UPPER_BOUND => {
-                hp = true;
-                p = prev[0 + 1].get(index);
-            }
-            1..=LIMIT_LOWER_BOUND => {
-                hp = true;
-                p = MAX_DATE.to_string();
-            }
-            _ => (),
-        }
+        let (hp, p) = match prev.len() {
+            LIMIT_UPPER_BOUND => (true, prev[0 + 1].get(index)),
+            1..=LIMIT_LOWER_BOUND => (true, MAX_DATE.to_string()),
+            _ => (false, "".to_string()),
+        };
 
         Cursor {
             has_next: hn,
@@ -279,8 +264,7 @@ CREATE TABLE IF NOT EXISTS articles (
         let conn = &mut self.client.lock().await;
         let query = "SELECT * FROM articles WHERE id = $1";
         let row = conn.query_one(query, &[&id]).await?;
-        let article: Article = Article::from(&row);
-        Ok(article)
+        Ok(Article::from(&row))
     }
 
     pub(crate) async fn get_unread_articles(&self, pagination: String) -> Result<Page> {

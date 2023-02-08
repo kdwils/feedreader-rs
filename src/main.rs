@@ -6,9 +6,16 @@ use base64::{engine::general_purpose, Engine as _};
 use chrono::{DateTime, SecondsFormat, Utc};
 use core::panic;
 use feed_rs::parser;
+use futures::stream::StreamExt;
+use futures::{future, stream};
 use rweb::*;
 use serde::{Deserialize, Serialize};
 use std::{env, str::FromStr, vec};
+use tokio::signal::unix::{signal, SignalKind};
+use tokio::time;
+use tokio_stream::wrappers::{IntervalStream, SignalStream};
+
+const DEFAULT_REFRESH_SECONDS: u64 = 3 * 60;
 
 #[derive(Debug)]
 struct AppError(anyhow::Error);
@@ -256,7 +263,54 @@ async fn main() {
         .or(refresh_feed(store.clone()))
         .with(cors);
 
-    serve(routes).run(([0, 0, 0, 0], 8080)).await;
+    let refresh_seconds = match env::var("FEED_REFRESH_SECONDS") {
+        Ok(s) => s.parse().unwrap_or(DEFAULT_REFRESH_SECONDS),
+        Err(_) => DEFAULT_REFRESH_SECONDS,
+    };
+
+    let mut exit = stream::select_all(vec![
+        SignalStream::new(signal(SignalKind::interrupt()).unwrap()),
+        SignalStream::new(signal(SignalKind::terminate()).unwrap()),
+        SignalStream::new(signal(SignalKind::quit()).unwrap()),
+    ]);
+
+    let refresh_store = store.clone();
+    let refresh_stream =
+        IntervalStream::new(time::interval(time::Duration::from_secs(refresh_seconds)))
+            .take_until(exit.next())
+            .for_each(|_| async {
+                let mut has_next = true;
+                let mut pagination = db::MAX_DATE.to_string();
+                while has_next {
+                    let page = match store.get_feeds(pagination.clone()).await {
+                        Ok(p) => p,
+                        Err(e) => {
+                            println!("could not list feeds: {}", e);
+                            has_next = false;
+                            continue;
+                        }
+                    };
+
+                    has_next = page.cursor.has_next;
+                    pagination = page.cursor.next;
+
+                    let feeds: Vec<Feed> = page.items.iter().map(|r| r.into()).collect();
+                    for f in feeds.iter() {
+                        match refresh(refresh_store.clone(), f.to_owned()).await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                println!("error updating feed {}: {}", f.feed_url, e);
+                            }
+                        }
+                    }
+                }
+            });
+
+    future::select(
+        Box::pin(serve(routes).run(([0, 0, 0, 0], 8080))),
+        Box::pin(refresh_stream),
+    )
+    .await;
 }
 
 #[get("/healthz")]
@@ -365,42 +419,12 @@ async fn refresh_feed(
     #[data] store: db::Storage,
     #[header = "pagination"] pagination: String,
 ) -> Result<FeedListTemplate, Rejection> {
-    let feed = store
+    let f = store
         .get_feed_by_id(id.clone())
         .await
         .map_err(reject_anyhow)?;
 
-    let content = reqwest::get(feed.feed_url)
-        .await
-        .map_err(|e| reject_anyhow(anyhow::Error::new(e)))?
-        .bytes()
-        .await
-        .map_err(|e| reject_anyhow(anyhow::Error::new(e)))?;
-
-    let parsed_feed = parser::parse(content.reader()).map_err(|_| warp::reject())?;
-    let articles: Vec<Article> = parsed_feed
-        .entries
-        .iter()
-        .map(|e| {
-            let mut o: Article = e.into();
-            o.feed = feed.name.clone();
-            o
-        })
-        .collect();
-
-    store
-        .add_articles(articles.clone().into_iter())
-        .await
-        .map_err(reject_anyhow)?;
-
-    let timestamp = chrono::Utc::now()
-        .to_rfc3339_opts(SecondsFormat::Secs, true)
-        .to_string();
-
-    match store.update_feed_last_updated(timestamp, id.clone()).await {
-        Ok(_) => (),
-        Err(e) => println!("could not update feed timestamp: {}", e.to_string()),
-    }
+    refresh(store.clone(), f).await.map_err(reject_anyhow)?;
 
     let page = store.get_feeds(pagination).await.map_err(reject_anyhow)?;
 
@@ -408,6 +432,28 @@ async fn refresh_feed(
         cursor: page.cursor,
         feeds: page.items.iter().map(|r| r.into()).collect(),
     })
+}
+
+async fn refresh(store: db::Storage, f: Feed) -> Result<()> {
+    let content = reqwest::get(f.feed_url).await?.bytes().await?;
+
+    let parsed_feed = parser::parse(content.reader())?;
+    let articles: Vec<Article> = parsed_feed
+        .entries
+        .iter()
+        .map(|e| {
+            let mut o: Article = e.into();
+            o.feed = f.name.clone();
+            o
+        })
+        .collect();
+
+    store.add_articles(articles.clone().into_iter()).await?;
+    store
+        .update_feed_last_updated(Article::rfc3339_timestamp(), f.id.clone())
+        .await?;
+
+    Ok(())
 }
 
 #[post("/articles/{article_id}/read")]
