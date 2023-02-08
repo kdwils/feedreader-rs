@@ -10,6 +10,14 @@ use rweb::*;
 use serde::{Deserialize, Serialize};
 use std::{env, str::FromStr, vec};
 
+#[derive(Debug)]
+struct AppError(anyhow::Error);
+impl rweb::reject::Reject for AppError {}
+
+fn reject_anyhow(err: anyhow::Error) -> Rejection {
+    warp::reject::custom(AppError(err))
+}
+
 #[derive(Deserialize, Serialize)]
 struct Healthz {
     up: bool,
@@ -48,18 +56,6 @@ struct ArticleBaseTemplate {
     cursor: db::Cursor,
     articles: Vec<Article>,
 }
-
-#[derive(Debug)]
-struct AppError(anyhow::Error);
-impl rweb::reject::Reject for AppError {}
-
-fn reject_anyhow(err: anyhow::Error) -> Rejection {
-    warp::reject::custom(AppError(err))
-}
-
-#[derive(Debug)]
-struct BadFilterError(String);
-impl rweb::reject::Reject for BadFilterError {}
 
 #[derive(Debug)]
 struct BadActionError();
@@ -248,15 +244,15 @@ async fn main() {
 
     let routes = healthz()
         .or(index(store.clone()))
-        .or(favorited(store.clone()))
+        .or(favorites(store.clone()))
         .or(history(store.clone()))
         .or(get_articles(store.clone()))
         .or(mark_article_read(store.clone()))
         .or(mark_article_favorite(store.clone()))
-        .or(add_feed(store.clone()))
-        .or(feeds_html(store.clone()))
+        .or(create_feed(store.clone()))
+        .or(feeds(store.clone()))
         .or(delete_feed(store.clone()))
-        .or(add_feed_html())
+        .or(add_feed())
         .or(refresh_feed(store.clone()))
         .with(cors);
 
@@ -276,15 +272,15 @@ async fn index(#[data] store: db::Storage) -> Result<ArticleBaseTemplate, Reject
         .map_err(reject_anyhow)?;
 
     Ok(ArticleBaseTemplate {
-        title: ArticleFilter::Unread.to_string(),
-        article_filter: ArticleFilter::Unread.to_string(),
+        title: db::Filter::Unread.to_string(),
+        article_filter: db::Filter::Unread.to_string(),
         cursor: page.cursor,
         articles: page.items.iter().map(|r| r.into()).collect(),
     })
 }
 
 #[get("/favorites.html")]
-async fn favorited(#[data] store: db::Storage) -> Result<ArticleBaseTemplate, Rejection> {
+async fn favorites(#[data] store: db::Storage) -> Result<ArticleBaseTemplate, Rejection> {
     let page = store
         .get_favorited_articles(db::MAX_DATE.to_string())
         .await
@@ -293,7 +289,7 @@ async fn favorited(#[data] store: db::Storage) -> Result<ArticleBaseTemplate, Re
     Ok(ArticleBaseTemplate {
         cursor: page.cursor,
         title: "favorites".to_string(),
-        article_filter: ArticleFilter::Favorite.to_string(),
+        article_filter: db::Filter::Favorite.to_string(),
         articles: page.items.iter().map(|r| r.into()).collect(),
     })
 }
@@ -308,13 +304,13 @@ async fn history(#[data] store: db::Storage) -> Result<ArticleBaseTemplate, Reje
     Ok(ArticleBaseTemplate {
         cursor: page.cursor,
         title: "history".to_string(),
-        article_filter: ArticleFilter::Read.to_string(),
+        article_filter: db::Filter::Read.to_string(),
         articles: page.items.iter().map(|r| r.into()).collect(),
     })
 }
 
 #[get("/feeds.html")]
-async fn feeds_html(#[data] db: db::Storage) -> Result<FeedsTemplate, Rejection> {
+async fn feeds(#[data] db: db::Storage) -> Result<FeedsTemplate, Rejection> {
     let page = db
         .get_feeds(db::MAX_DATE.to_string())
         .await
@@ -327,12 +323,12 @@ async fn feeds_html(#[data] db: db::Storage) -> Result<FeedsTemplate, Rejection>
 }
 
 #[get("/add_feed.html")]
-async fn add_feed_html() -> Result<AddFeedTemplate, Rejection> {
+async fn add_feed() -> Result<AddFeedTemplate, Rejection> {
     Ok(AddFeedTemplate {})
 }
 
 #[post("/feeds")]
-async fn add_feed(
+async fn create_feed(
     #[form] feed: AddFeed,
     #[data] store: db::Storage,
 ) -> Result<FeedsTemplate, Rejection> {
@@ -376,10 +372,10 @@ async fn refresh_feed(
 
     let content = reqwest::get(feed.feed_url)
         .await
-        .map_err(|_| warp::reject())?
+        .map_err(|e| reject_anyhow(anyhow::Error::new(e)))?
         .bytes()
         .await
-        .map_err(|_| warp::reject())?;
+        .map_err(|e| reject_anyhow(anyhow::Error::new(e)))?;
 
     let parsed_feed = parser::parse(content.reader()).map_err(|_| warp::reject())?;
     let articles: Vec<Article> = parsed_feed
@@ -402,7 +398,7 @@ async fn refresh_feed(
         .to_string();
 
     match store.update_feed_last_updated(timestamp, id.clone()).await {
-        Ok(_) => (), // does not matter if this works or not
+        Ok(_) => (),
         Err(e) => println!("could not update feed timestamp: {}", e.to_string()),
     }
 
@@ -431,10 +427,10 @@ async fn mark_article_read(
         .await
         .map_err(reject_anyhow)?;
 
-    let filter = ArticleFilter::from_str(article_filter.as_str())?;
+    let filter = db::Filter::from_str(article_filter.as_str()).map_err(reject_anyhow)?;
 
-    let page = filter
-        .list_articles(store.clone(), pagination.clone())
+    let page = store
+        .filter(filter, pagination)
         .await
         .map_err(reject_anyhow)?;
 
@@ -456,10 +452,10 @@ async fn mark_article_favorite(
         .await
         .map_err(reject_anyhow)?;
 
-    let filter = ArticleFilter::from_str(article_filter.as_str())?;
+    let filter = db::Filter::from_str(article_filter.as_str()).map_err(reject_anyhow)?;
 
-    let page = filter
-        .list_articles(store.clone(), pagination)
+    let page = store
+        .filter(filter, pagination)
         .await
         .map_err(reject_anyhow)?;
 
@@ -475,10 +471,10 @@ async fn get_articles(
     #[header = "pagination"] pagination: String,
     #[header = "article_filter"] article_filter: String,
 ) -> Result<ArticleListTemplate, Rejection> {
-    let filter = ArticleFilter::from_str(article_filter.as_str())?;
+    let filter = db::Filter::from_str(article_filter.as_str()).map_err(reject_anyhow)?;
 
-    let page = filter
-        .list_articles(store.clone(), pagination)
+    let page = store
+        .filter(filter, pagination)
         .await
         .map_err(reject_anyhow)?;
 
@@ -486,43 +482,4 @@ async fn get_articles(
         cursor: page.cursor,
         articles: page.items.iter().map(|r| r.into()).collect(),
     })
-}
-
-#[derive(Debug)]
-enum ArticleFilter {
-    Unread,
-    Favorite,
-    Read,
-}
-
-impl FromStr for ArticleFilter {
-    type Err = BadFilterError;
-    fn from_str(s: &str) -> Result<ArticleFilter, BadFilterError> {
-        match s {
-            "unread" => Ok(ArticleFilter::Unread),
-            "favorite" => Ok(ArticleFilter::Favorite),
-            "read" => Ok(ArticleFilter::Read),
-            _ => Err(BadFilterError(
-                format!("bad article filter: {}", s).to_string(),
-            )),
-        }
-    }
-}
-
-impl ArticleFilter {
-    async fn list_articles(self, store: db::Storage, pagination: String) -> Result<db::Page> {
-        match self {
-            ArticleFilter::Unread => return store.get_unread_articles(pagination).await,
-            ArticleFilter::Favorite => return store.get_favorited_articles(pagination).await,
-            ArticleFilter::Read => return store.get_read_articles(pagination).await,
-        }
-    }
-
-    fn to_string(&self) -> String {
-        match self {
-            ArticleFilter::Read => "read".to_string(),
-            ArticleFilter::Favorite => "favorite".to_string(),
-            ArticleFilter::Unread => "unread".to_string(),
-        }
-    }
 }
