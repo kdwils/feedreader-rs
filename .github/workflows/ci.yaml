@@ -1,0 +1,21 @@
+name: Build Push Sign
+on:
+  push:
+    branches: ["main"]
+jobs:
+  build-push-sign:
+    uses: kdwils/homelab-workflow/.github/workflows/build-push-sign.yml@main
+    secrets: inherit
+    with:
+      image: kdwils/go-hello
+      registry: ghcr.io
+      environment: Homelab
+  update-image-tag:
+    needs: build-push-sign
+    uses: kdwils/homelab-workflow/.github/workflows/update-image-tag.yml@main
+    secrets: inherit
+    with:
+      image: kdwils/go-hello
+      registry: ghcr.io
+      environment: Homelab
+      deploy_repo: kdwils/go-hello-deploy
