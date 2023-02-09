@@ -1,7 +1,7 @@
 FROM rust:slim-buster as build
-RUN apt-get update && apt-get --no-install-recommends install -y libssl-dev pkg-config
+RUN USER=root apt-get update && apt-get --no-install-recommends install -y libssl-dev pkg-config
 
-RUN USER=root cargo new --bin feedreader
+RUN cargo new --bin feedreader
 WORKDIR /feedreader
 
 COPY Cargo.* ./
@@ -13,17 +13,7 @@ RUN cargo build --release
 
 FROM debian:buster-slim
 
-ENV USER=app
-ENV UID=1000
-
-RUN adduser \
-    --disabled-password \
-    --gecos "" \
-    --home "/nonexistent" \
-    --shell "/sbin/nologin" \
-    --no-create-home \
-    --uid "${UID}" \
-    "${USER}"
+RUN USER=root apt-get update && apt-get --no-install-recommends install -y
 
 WORKDIR /feedreader
 COPY --from=build --chown=1000:0 /feedreader/target/release/feedreader feedreader
