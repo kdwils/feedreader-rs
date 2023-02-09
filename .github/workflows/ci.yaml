@@ -7,7 +7,7 @@ jobs:
     uses: kdwils/homelab-workflow/.github/workflows/build-push-sign.yml@main
     secrets: inherit
     with:
-      image: kdwils/go-hello
+      image: kdwils/feedreader
       registry: ghcr.io
       environment: Homelab
   update-image-tag:
@@ -15,7 +15,7 @@ jobs:
     uses: kdwils/homelab-workflow/.github/workflows/update-image-tag.yml@main
     secrets: inherit
     with:
-      image: kdwils/go-hello
+      image: kdwils/feedreader
       registry: ghcr.io
       environment: Homelab
-      deploy_repo: kdwils/go-hello-deploy
+      deploy_repo: kdwils/feedreader-deploy
