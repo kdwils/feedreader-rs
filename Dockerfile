@@ -1,4 +1,4 @@
-FROM rust:slim-buster as build
+FROM --platform=$BUILDPLATFORM rust:slim-buster as build
 
 RUN apt-get update && apt-get --no-install-recommends install -y pkg-config libssl-dev
 
