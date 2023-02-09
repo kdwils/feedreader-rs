@@ -1,6 +1,6 @@
 FROM --platform=$BUILDPLATFORM rust:slim-buster as build
 
-RUN apt-get update && apt-get --no-install-recommends install -y     libssl-dev
+RUN apt-get update && apt-get --no-install-recommends install -y libssl-dev pkg-config
 
 RUN cargo new --bin feedreader
 WORKDIR /feedreader
