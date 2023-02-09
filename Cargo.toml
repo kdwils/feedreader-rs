@@ -20,8 +20,9 @@ reqwest = "0.11.14"
 rss = "2.0.2"
 rweb = "0.15.0"
 serde = { version = "1.0.152", features = ["derive"] }
-tokio = "1.24.2"
+tokio = { version = "1.24.2", features = ["full"] }
 tokio-postgres = "0.7.7"
+tokio-stream = { version = "0.1.11", features = ["signal"] }
 
 [[bin]]
 name = "feedreader"
