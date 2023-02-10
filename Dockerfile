@@ -1,5 +1,5 @@
 FROM rust:slim-buster as build
-RUN USER=root apt-get update && apt-get --no-install-recommends install -y libssl-dev pkg-config
+RUN USER=root apt-get update && apt-get --no-install-recommends install -y libssl-dev pkg-config openssl
 
 RUN cargo new --bin feedreader
 WORKDIR /feedreader
