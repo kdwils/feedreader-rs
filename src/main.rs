@@ -247,6 +247,16 @@ async fn main() {
 
     let cors = warp::cors()
         .allow_any_origin()
+        .allow_headers(vec![
+            "Authorization",
+            "Content-Type",
+            "User-Agent",
+            "Sec-Fetch-Mode",
+            "Referer",
+            "Origin",
+            "Access-Control-Request-Method",
+            "Access-Control-Request-Headers",
+        ])
         .allow_methods(vec!["GET", "HEAD", "POST", "DELETE"]);
 
     let routes = healthz()
