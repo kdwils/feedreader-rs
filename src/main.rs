@@ -256,6 +256,8 @@ async fn main() {
             "Origin",
             "Access-Control-Request-Method",
             "Access-Control-Request-Headers",
+            "article_filter",
+            "pagination",
         ])
         .allow_methods(vec!["GET", "HEAD", "POST", "DELETE"]);
 
