@@ -136,7 +136,7 @@ impl Article {
         favorited: bool,
     ) -> Self {
         Article {
-            id: general_purpose::URL_SAFE.encode(link.clone()),
+            id: general_purpose::URL_SAFE_NO_PAD.encode(link.clone()),
             feed: "".to_string(),
             title,
             link,
