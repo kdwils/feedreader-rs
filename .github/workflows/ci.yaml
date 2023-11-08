@@ -1,7 +1,9 @@
 name: Build Push Sign
 on:
   push:
-    branches: ["main"]
+    branches: ["*"]
+  pull_request:
+    branches: ["*"]
 jobs:
   build-push-sign:
     uses: kdwils/homelab-workflow/.github/workflows/build-push-sign.yml@main
