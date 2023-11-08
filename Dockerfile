@@ -1,7 +1,9 @@
 FROM rust:slim-buster as build
+
 RUN USER=root apt-get update && apt-get --no-install-recommends install -y libssl-dev pkg-config openssl
 
 RUN cargo new --bin feedreader
+
 WORKDIR /feedreader
 
 COPY Cargo.* ./
@@ -9,6 +11,7 @@ COPY Cargo.* ./
 RUN cargo build --release && rm src/*.rs && rm target/release/deps/feedreader*
 
 COPY . .
+
 RUN cargo build --release
 
 FROM debian:buster-slim
